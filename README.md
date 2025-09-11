@@ -1,3 +1,6 @@
-Flash ESP32 Web Dashboard with the code "ESP32 Web Dashboard Main" and save IP from serial monitor to open in the web browser
-Flash ESP32 1 & 2 with the code "ESP32 Relay 1 & 2" and save the IP address for both to set up in "ESP32 Web Dashboard Main"
-Change the GPIO pin in ESP32 1 & 2 to your preference I used in both Pin # 2
+
+Flash ESP32 Web Dashboard con el codigo "ESP32 Web Dashboard Main" y salva la IP que te muestra el Serial Monitor luego lo vas a necesitar para abrir tu Dashboard en el navegador
+Flash ESP32 1 & 2 con el codigo "ESP32 Relay 1 & 2" y salva las dos IP's para despues crear tu array en el codigo del Dasboard
+Cambia el GPIO pin los ESP32 1 & 2 por el Pin de tu preferencia en mi caso yo utilize el Pin "2"
+Todos los ESP32 son alimentados con cables USB tipo C y fuentes de poder de 5V y se pega por serial al puerto USB de la PC
+En este proyecto se utilizó el IDE de Arduino 

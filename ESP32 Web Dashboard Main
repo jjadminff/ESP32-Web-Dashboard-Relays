@@ -8,7 +8,219 @@ const char* password = "YourPassword";
 struct Relay {
   const char* name;
   const char* ip;
-  const char* headerColor; // card header color
+  const char* headerColor; // card header color#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "FFNET";
+const char* password = "W4tchTh3G4M3*";
+
+struct Relay {
+  const char* name;
+  const char* ip;
+  const char* headerColor;
+};
+
+Relay relays[] = {
+  {"Relay 1", "192.168.3.74", "#2196f3"},
+  {"Relay 2", "192.168.3.42", "#ff9800"},
+};
+
+const int relayCount = sizeof(relays)/sizeof(relays[0]);
+WebServer server(80);
+
+String dashboardPage() {
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>ESP32 Relay Dashboard</title>
+<style>
+  :root {
+    --bg-color: #1e1e1e;
+    --card-color: #333;
+    --text-color: #fff;
+    --log-bg: #222;
+  }
+  body { font-family: Arial, sans-serif; margin:10px; background:var(--bg-color); color:var(--text-color); text-align:center; transition: all 0.3s ease; }
+  h1 { font-size: 1.6rem; margin-bottom: 20px; }
+  .container { display:flex; justify-content:center; flex-wrap:wrap; gap:15px; }
+  .card {
+    flex: 1 1 250px;
+    max-width: 280px;
+    margin:10px;
+    padding:15px;
+    border-radius:15px;
+    background:var(--card-color);
+    box-shadow:0 4px 8px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease-in-out, background 0.3s ease;
+  }
+  .card:hover { transform: scale(1.03); }
+  .card h2 { margin:0; padding:10px; border-radius:10px 10px 0 0; color:#fff; font-size:1.2rem; }
+  .state { font-size:1.5rem; margin-top:10px; padding:8px; border-radius:10px; }
+  .on { background:#4caf50; color:#fff; }
+  .off { background:#f44336; color:#fff; }
+  .timestamp { margin-top:8px; font-size:0.9rem; color:#bbb; }
+  button {
+    padding:12px 20px;
+    margin-top:12px;
+    width: 100%;
+    border:none;
+    border-radius:10px;
+    background:#555;
+    color:#fff;
+    font-size:1rem;
+    cursor:pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background:#777; }
+  #themeToggle {
+    width:auto;
+    background:#2196f3;
+    margin-bottom:15px;
+  }
+  #log {
+    margin-top:20px;
+    font-size:0.85rem;
+    color:#ccc;
+    max-height:200px;
+    overflow-y:auto;
+    text-align:left;
+    background:var(--log-bg);
+    padding:10px;
+    border-radius:10px;
+    transition: background 0.3s ease;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 1.3rem; }
+    .card { max-width: 95%; }
+    button { font-size: 1rem; padding:10px; }
+    .state { font-size:1.2rem; }
+  }
+</style>
+</head>
+<body>
+<h1>ESP32 Relay Dashboard</h1>
+<button id="themeToggle" onclick="toggleTheme()">Cambiar Tema</button>
+<div class="container">
+)rawliteral";
+
+  for(int i=0; i<relayCount; i++){
+    html += "<div class=\"card\">";
+    html += "<h2 style=\"background:"+String(relays[i].headerColor)+"\">"+String(relays[i].name)+"</h2>";
+    html += "<button onclick=\"toggleRelay("+String(i)+")\">Toggle</button>";
+    html += "<div id=\"relay"+String(i)+"\" class=\"state off\">--</div>";
+    html += "<div id=\"time"+String(i)+"\" class=\"timestamp\">Último cambio: --</div>";
+    html += "</div>";
+  }
+
+  html += R"rawliteral(
+</div>
+
+<div id="log"><h3>Historial de Acciones</h3></div>
+
+<script>
+let relays = [
+)rawliteral";
+
+  for(int i=0;i<relayCount;i++){
+    html += "{name:\""+String(relays[i].name)+"\", ip:\""+String(relays[i].ip)+"\"}";
+    if(i<relayCount-1) html += ",";
+  }
+
+  html += R"rawliteral(
+];
+
+let logEntries = [];
+let darkMode = true;
+
+function getTimeStamp() {
+  const now = new Date();
+  return now.toLocaleTimeString();
+}
+
+function toggleTheme() {
+  darkMode = !darkMode;
+  if (darkMode) {
+    document.documentElement.style.setProperty('--bg-color', '#1e1e1e');
+    document.documentElement.style.setProperty('--card-color', '#333');
+    document.documentElement.style.setProperty('--text-color', '#fff');
+    document.documentElement.style.setProperty('--log-bg', '#222');
+    document.getElementById("themeToggle").innerText = "Cambiar Tema";
+  } else {
+    document.documentElement.style.setProperty('--bg-color', '#f4f4f4');
+    document.documentElement.style.setProperty('--card-color', '#fff');
+    document.documentElement.style.setProperty('--text-color', '#000');
+    document.documentElement.style.setProperty('--log-bg', '#ddd');
+    document.getElementById("themeToggle").innerText = "Cambiar Tema";
+  }
+}
+
+async function toggleRelay(i){
+  const el = document.getElementById("relay"+i);
+  const url = el.innerText=="ON"?"/relay/off":"/relay/on";
+  try{
+    const res = await fetch(`http://${relays[i].ip}${url}`);
+    const text = await res.text();
+    el.innerText = text;
+    el.className = "state "+(text=="ON"?"on":"off");
+    document.getElementById("time"+i).innerText = "Último cambio: " + getTimeStamp();
+
+    logEntries.unshift(`[${getTimeStamp()}] ${relays[i].name} → ${text}`);
+    if(logEntries.length>10) logEntries.pop();
+    document.getElementById("log").innerHTML = "<h3>Historial de Acciones</h3>" + logEntries.join("<br>");
+  } catch(e){ console.log("Error toggling relay "+i,e);}
+}
+
+async function updateState(i){
+  try {
+    const res = await fetch(`http://${relays[i].ip}/relay/state`);
+    const text = await res.text();
+    const el = document.getElementById("relay"+i);
+    el.innerText = text;
+    el.className = "state "+(text=="ON"?"on":"off");
+    const timeEl = document.getElementById("time"+i);
+    if((text=="ON" || text=="OFF") && timeEl.innerText.includes("--")) {
+      timeEl.innerText = "Último cambio: " + getTimeStamp();
+    }
+  } catch(e){ console.log("Error updating relay "+i,e); }
+}
+
+setInterval(()=>{ for(let i=0;i<relays.length;i++) updateState(i); },5000);
+for(let i=0;i<relays.length;i++) updateState(i);
+</script>
+</body>
+</html>
+)rawliteral";
+
+  return html;
+}
+
+void handleRoot() {
+  server.send(200, "text/html", dashboardPage());
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while(WiFi.status() != WL_CONNECTED){
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected!");
+  Serial.print("Dashboard IP: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
+
 };
 
 Relay relays[] = {
